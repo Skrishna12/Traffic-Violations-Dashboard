@@ -15,42 +15,58 @@ st.divider()
 st.sidebar.header("🔍 Filters")
 
 # Gender
-gender = st.sidebar.multiselect("Gender", ["M", "F"])
+gender_options = ['M', 'F']
+
+gender = st.sidebar.multiselect(
+    "Gender",
+    options=gender_options,
+    default=gender_options
+)
 
 # Vehicle
+vehicle_options = pd.read_sql(
+    "SELECT DISTINCT VehicleType FROM traffic_data",
+    engine
+)['VehicleType'].dropna().tolist()
+
 vehicle = st.sidebar.multiselect(
     "Vehicle Type",
-    pd.read_sql("SELECT DISTINCT VehicleType FROM traffic_data", engine)['VehicleType']
+    options=vehicle_options,
+    default=vehicle_options
 )
 
 # Race
+race_options = pd.read_sql(
+    "SELECT DISTINCT Race FROM traffic_data",
+    engine
+)['Race'].dropna().tolist()
+
 race = st.sidebar.multiselect(
     "Race",
-    pd.read_sql("SELECT DISTINCT Race FROM traffic_data", engine)['Race']
+    options=race_options,
+    default=race_options
 )
-
 # ================= BASE QUERY =================
 base_query = "SELECT * FROM traffic_data WHERE 1=1"
 
-if gender:
+if set(gender) != set(gender_options):
     base_query += f" AND Gender IN ({','.join([f'\"{g}\"' for g in gender])})"
 
-if vehicle:
+if set(vehicle) != set(vehicle_options):
     base_query += f" AND VehicleType IN ({','.join([f'\"{v}\"' for v in vehicle])})"
 
-if race:
+if set(race) != set(race_options):
     base_query += f" AND Race IN ({','.join([f'\"{r}\"' for r in race])})"
 
 # LIMIT for performance
 base_query += " LIMIT 500000"
-
 # ================= KPI =================
 total = pd.read_sql(f"""
     SELECT COUNT(*) as count
     FROM ({base_query}) AS filtered
 """, engine)
 
-st.metric("🚗 Total Violations", int(total['count'][0]))
+st.metric("Total Violations", int(total['count']))
 st.divider()
 
 # ================= TOP VIOLATIONS =================
@@ -72,11 +88,14 @@ st.divider()
 st.subheader("Violations by Hour")
 
 hour_data = pd.read_sql(f"""
-    SELECT HOUR(Date_of_Stop) as hour, COUNT(*) as count
+    SELECT Hour as hour, COUNT(*) as count
     FROM ({base_query}) AS filtered
-    GROUP BY HOUR(Date_of_Stop)
-    ORDER BY hour
+    WHERE Hour IS NOT NULL
+    GROUP BY Hour
+    ORDER BY Hour
 """, engine)
+
+st.write("Hour Data Preview:", hour_data.head())  # debug
 
 fig2 = px.line(hour_data, x="hour", y="count")
 st.plotly_chart(fig2, use_container_width=True)
